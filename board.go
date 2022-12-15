@@ -1,8 +1,6 @@
 package main
 
-import "fmt"
-
-type Symbol int64
+type Symbol byte
 
 const (
 	None Symbol = iota
@@ -11,7 +9,6 @@ const (
 )
 
 type Board [3][3]Symbol
-type InvalidMoveError string
 
 func (symbol *Symbol) Name() string {
 	switch *symbol {
@@ -37,21 +34,6 @@ func (symbol *Symbol) String() string {
 	default:
 		return "$"
 	}
-}
-
-func (err InvalidMoveError) Error() string {
-	return string(err)
-}
-
-func (board *Board) move(row int, column int, symbol Symbol) error {
-	if row > 2 || column > 2 {
-		return InvalidMoveError(fmt.Sprintf("Invalid index, %d:%d is not within the boundaries of the board", row, column))
-	}
-	if board[row][column] != None {
-		return InvalidMoveError(fmt.Sprintf("Invalid move, %d:%d is being used by %s", row, column, (&symbol).Name()))
-	}
-	board[row][column] = symbol
-	return nil
 }
 
 func (board *Board) toString() string {

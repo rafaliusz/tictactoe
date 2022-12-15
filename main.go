@@ -3,18 +3,29 @@ package main
 import "fmt"
 
 func main() {
-	var board Board
-	board.move(1, 1, Cross)
-	board.move(2, 2, Circle)
-	board.move(2, 0, Cross)
+	var tictactoe TicTacToeGame
+	tictactoe.move(1, 1, Cross)
+	tictactoe.move(2, 2, Circle)
+	tictactoe.move(2, 0, Cross)
 
-	err := board.move(2, 0, Cross)
+	_, err := tictactoe.move(2, 0, Cross)
 	if err != nil {
 		fmt.Println(err)
 	}
-	err = board.move(3, 0, Cross)
+	_, err = tictactoe.move(3, 0, Circle)
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(board.toString())
+	gameState, err := tictactoe.move(0, 0, Circle)
+	fmt.Println(gameState)
+
+	gameState, err = tictactoe.move(0, 2, Cross)
+	fmt.Println(gameState)
+
+	fmt.Println(tictactoe.board.toString())
+
+	_, err = tictactoe.move(0, 0, Circle)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
