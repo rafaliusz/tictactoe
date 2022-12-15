@@ -89,7 +89,7 @@ func getGameState(board *Board) GameState {
 		}
 	}
 	if board[2][1] != None {
-		gameState := checkRow(board, 0)
+		gameState := checkRow(board, 2)
 		if gameState != InProgress {
 			return gameState
 		}
