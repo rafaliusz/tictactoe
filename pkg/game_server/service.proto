@@ -1,0 +1,48 @@
+syntax = "proto3";
+option go_package = "/game_server";
+import "google/protobuf/empty.proto";
+
+
+service GamesManager {
+    rpc Join(google.protobuf.Empty) returns (JoinResult) {}
+    rpc Move(Position) returns (MoveResult) {}
+}
+
+service Player {
+    rpc UpdateGameState(Position) returns (UpdateGameStateResult) {}
+    rpc YourMove(google.protobuf.Empty) returns (YourMoveResult) {}
+    rpc GameFinished(GameResult) returns (GameFinishedResult) {}
+}
+
+message JoinResult {
+    bool result = 1;
+    string info = 2;
+}
+
+message UpdateGameStateResult {}
+message YourMoveResult {}
+message GameFinishedResult {}
+
+message GameResult {
+    GameResultEnum result = 1;
+}
+
+enum GameResultEnum {
+    Win = 0;
+    Loss = 1;
+}
+
+message Position {
+    int32 row = 1;
+    int32 column = 2;
+}
+
+message MoveResult {
+    MoveResultEnum result = 1;
+}
+
+enum MoveResultEnum {
+    Ok = 0;
+    Retry = 1;
+    Error = 2;
+}
