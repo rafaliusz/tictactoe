@@ -2,7 +2,6 @@ syntax = "proto3";
 option go_package = "/game_server";
 import "google/protobuf/empty.proto";
 
-
 service GamesManager {
     rpc Join(google.protobuf.Empty) returns (JoinResult) {}
     rpc Move(Position) returns (MoveResult) {}
@@ -16,7 +15,8 @@ service Player {
 
 message JoinResult {
     bool result = 1;
-    string info = 2;
+    string token = 2;
+    string info = 3;
 }
 
 message UpdateGameStateResult {}

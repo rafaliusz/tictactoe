@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/google/uuid"
 	"github.com/rafaliusz/tictactoe/pkg/game_server"
 	"github.com/rafaliusz/tictactoe/pkg/logic"
 	"google.golang.org/grpc"
@@ -26,6 +27,7 @@ type gamesManagerServer struct {
 
 type PlayerInfo struct {
 	address string
+	token   string
 	symbol  logic.Symbol
 }
 
@@ -61,13 +63,14 @@ func (gs *gamesManagerServer) Join(ctx context.Context, in *empty.Empty) (*game_
 		return &game_server.JoinResult{Result: false, Info: "Internal error"}, JoinError("Can't get address from metadata")
 	}
 	address := addressMD[0]
+	token := uuid.New()
 
-	gs.players[gs.playersCount] = PlayerInfo{address: address, symbol: symbol}
+	gs.players[gs.playersCount] = PlayerInfo{address: address, symbol: symbol, token: token.String()}
 	gs.playersCount++
 	if gs.playersCount == 2 {
 		go gs.StartGame()
 	}
-	return &game_server.JoinResult{Result: true, Info: "Welcome to the lobby"}, nil
+	return &game_server.JoinResult{Result: true, Token: token.String(), Info: "Welcome to the lobby"}, nil
 }
 
 func (gs *gamesManagerServer) StartGame() {
@@ -136,11 +139,20 @@ func (gs *gamesManagerServer) Move(ctx context.Context, position *game_server.Po
 	if ctx == nil {
 		return &game_server.MoveResult{Result: game_server.MoveResultEnum_Error}, MoveError("Nil context")
 	}
-	address, err := getAddress(&ctx)
+	address, err := getFromMetadata(&ctx, "address")
 	if err != nil {
 		return &game_server.MoveResult{Result: game_server.MoveResultEnum_Error}, err
 	}
-	currentPlayer, otherPlayer := getPlayers(gs.players, address)
+	token, err := getFromMetadata(&ctx, "token")
+	if err != nil {
+		return &game_server.MoveResult{Result: game_server.MoveResultEnum_Error}, err
+	}
+	currentPlayer, otherPlayer := getPlayers(gs.players, token)
+	if currentPlayer == nil || otherPlayer == nil {
+		log.Printf("Invalid token provided: %s, address: %s", token, address)
+		return &game_server.MoveResult{Result: game_server.MoveResultEnum_Error}, err
+	}
+	currentPlayer.address = address
 
 	gameState, err := gs.game.Move(int(position.Column), int(position.Row), currentPlayer.symbol)
 	if err != nil {
@@ -163,28 +175,30 @@ func (gs *gamesManagerServer) Move(ctx context.Context, position *game_server.Po
 	return &game_server.MoveResult{Result: game_server.MoveResultEnum_Ok}, nil
 }
 
-func getAddress(ctx *context.Context) (string, error) {
+func getFromMetadata(ctx *context.Context, key string) (string, error) {
 	md, ok := metadata.FromIncomingContext(*ctx)
 	if !ok {
 		return "", MoveError("Can't get metadata")
 	}
-	addressMD, ok := md["address"]
+	value, ok := md[key]
 	if !ok {
-		return "", MoveError("Can't get address from metadata")
+		return "", MoveError("Can't get from metadata: " + key)
 	}
-	return addressMD[0], nil
+	return value[0], nil
 }
 
-func getPlayers(players [2]PlayerInfo, address string) (*PlayerInfo, *PlayerInfo) {
+func getPlayers(players [2]PlayerInfo, token string) (*PlayerInfo, *PlayerInfo) {
 	var currentPlayer *PlayerInfo
 	var otherPlayer *PlayerInfo
-	if players[0].address == address {
+
+	if players[0].token == token {
 		currentPlayer = &players[0]
 		otherPlayer = &players[1]
-	} else {
+	} else if players[1].token == token {
 		currentPlayer = &players[1]
 		otherPlayer = &players[0]
 	}
+
 	return currentPlayer, otherPlayer
 }
 

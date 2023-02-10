@@ -38,7 +38,7 @@ func startServer(server *playerServer) {
 	server.grpcServer.Serve(lis)
 }
 
-func joinGame(port int) (bool, error) {
+func (ps *playerServer) joinGame(port int) (bool, error) {
 	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		fmt.Println(err.Error())
@@ -53,6 +53,9 @@ func joinGame(port int) (bool, error) {
 	res, err := gamesManagerClient.Join(ctx, &emptypb.Empty{})
 	if err != nil {
 		return false, err
+	}
+	if res.Result {
+		ps.token = res.Token
 	}
 	return res.Result, nil
 }
@@ -75,7 +78,8 @@ func main() {
 		fmt.Println("Invalid port")
 		os.Exit(1)
 	}
-	joined, err := joinGame(port)
+	ps := createPlayerServer(port)
+	joined, err := ps.joinGame(port)
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(-1)
@@ -86,7 +90,6 @@ func main() {
 	} else {
 		log.Println("Joined the game")
 	}
-	ps := createPlayerServer(port)
 	go startServer(ps)
 	log.Println("server started")
 

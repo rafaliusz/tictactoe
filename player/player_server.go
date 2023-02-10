@@ -26,6 +26,7 @@ type playerServer struct {
 	gameMutex     sync.RWMutex
 	needMove      atomic.Bool
 	move          chan [2]int
+	token         string
 }
 
 func (ps *playerServer) YourMove(ctx context.Context, empty *emptypb.Empty) (*game_server.YourMoveResult, error) {
@@ -72,8 +73,8 @@ func (ps *playerServer) PlayerMove() {
 	}
 	defer conn.Close()
 	gamesManagerClient := game_server.NewGamesManagerClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
-	md := metadata.New(map[string]string{"address": "localhost:" + strconv.Itoa(ps.port)})
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	md := metadata.New(map[string]string{"address": "localhost:" + strconv.Itoa(ps.port), "token": ps.token})
 	ctx = metadata.NewOutgoingContext(ctx, md)
 	defer cancel()
 	res, err := gamesManagerClient.Move(ctx, &game_server.Position{Row: int32(move[0]), Column: int32(move[1])})
@@ -91,7 +92,7 @@ func (ps *playerServer) PlayerMove() {
 		return
 	}
 
-	log.Printf("PlayerMove: move error: %s \n", err.Error())
+	log.Println("PlayerMove: server returned error")
 }
 
 func (ps *playerServer) UpdateGameState(ctx context.Context, position *game_server.Position) (*game_server.UpdateGameStateResult, error) {
