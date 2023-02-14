@@ -1,14 +1,18 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"os"
+	"time"
 
 	"github.com/rafaliusz/tictactoe/pkg/game_server"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+)
+
+const (
+	rpcTimeout = 5 * time.Second
 )
 
 func createGamesManagerServer() *gamesManagerServer {
@@ -21,7 +25,7 @@ func startServer(gamesManagerServer *gamesManagerServer) {
 	grpcServer := grpc.NewServer(opts...)
 	reflection.Register(grpcServer)
 	game_server.RegisterGamesManagerServer(grpcServer, gamesManagerServer)
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", 666))
+	lis, err := net.Listen("tcp", "127.0.0.1:666")
 	if err != nil {
 		log.Fatalln(err.Error())
 		os.Exit(-1)

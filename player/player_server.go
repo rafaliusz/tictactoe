@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,13 +19,46 @@ import (
 type playerServer struct {
 	game_server.UnimplementedPlayerServer
 	grpcServer    *grpc.Server
-	port          int
+	address       string
 	game          logic.TicTacToeGame
 	playersSymbol logic.Symbol
 	gameMutex     sync.RWMutex
 	needMove      atomic.Bool
 	move          chan [2]int
 	token         string
+}
+
+func createGamesManagerClient(address string, token string, timeout time.Duration) (game_server.GamesManagerClient, *grpc.ClientConn, *context.CancelFunc, *context.Context, error) {
+	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	gamesManagerClient := game_server.NewGamesManagerClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	metadataMap := map[string]string{"address": address}
+	if token != "" {
+		metadataMap["token"] = token
+	}
+	md := metadata.New(metadataMap)
+	ctx = metadata.NewOutgoingContext(ctx, md)
+	return gamesManagerClient, conn, &cancel, &ctx, nil
+}
+
+func (ps *playerServer) joinGame() (bool, error) {
+	gamesManagerClient, connection, cancel, ctx, err := createGamesManagerClient(ps.address, ps.token, joinTimeout)
+	if err != nil {
+		return false, err
+	}
+	defer connection.Close()
+	defer (*cancel)()
+	res, err := gamesManagerClient.Join(*ctx, &emptypb.Empty{})
+	if err != nil {
+		return false, err
+	}
+	if res.Result {
+		ps.token = res.Token
+	}
+	return res.Result, nil
 }
 
 func (ps *playerServer) YourMove(ctx context.Context, empty *emptypb.Empty) (*game_server.YourMoveResult, error) {
@@ -67,17 +99,14 @@ func (ps *playerServer) PlayerMove() {
 	ps.needMove.Store(true)
 	move := <-ps.move
 
-	conn, err := grpc.Dial("localhost:666", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	gamesManagerClient, connection, cancel, ctx, err := createGamesManagerClient(ps.address, ps.token, moveTimeout)
 	if err != nil {
-		log.Printf("PlayerMove dial error: %s", err.Error())
+		log.Fatalf("PlayerMove: error creating client: %s", err.Error())
+		return
 	}
-	defer conn.Close()
-	gamesManagerClient := game_server.NewGamesManagerClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	md := metadata.New(map[string]string{"address": "localhost:" + strconv.Itoa(ps.port), "token": ps.token})
-	ctx = metadata.NewOutgoingContext(ctx, md)
-	defer cancel()
-	res, err := gamesManagerClient.Move(ctx, &game_server.Position{Row: int32(move[0]), Column: int32(move[1])})
+	defer connection.Close()
+	defer (*cancel)()
+	res, err := gamesManagerClient.Move(*ctx, &game_server.Position{Row: int32(move[0]), Column: int32(move[1])})
 	if err != nil {
 		log.Printf("Error returned by the server on Move: %s\n", err.Error())
 		return

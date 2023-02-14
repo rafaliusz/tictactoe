@@ -65,6 +65,7 @@ func (gs *gamesManagerServer) Join(ctx context.Context, in *empty.Empty) (*game_
 	address := addressMD[0]
 	token := uuid.New()
 
+	log.Printf("Creating player: address %s\n", address)
 	gs.players[gs.playersCount] = PlayerInfo{address: address, symbol: symbol, token: token.String()}
 	gs.playersCount++
 	if gs.playersCount == 2 {
@@ -78,20 +79,28 @@ func (gs *gamesManagerServer) StartGame() {
 	gs.YourMove(&gs.players[0])
 }
 
+func createPlayerClient(address string, timeout time.Duration) (game_server.PlayerClient, *grpc.ClientConn, *context.CancelFunc, *context.Context, error) {
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	playerClient := game_server.NewPlayerClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	return playerClient, conn, &cancel, &ctx, nil
+}
+
 func (gs *gamesManagerServer) UpdateGameState(player *PlayerInfo, position *game_server.Position) {
 	log.Printf("UpdateGameState, player address: %s\n", player.address)
 	gs.gameMutex.Lock()
 	defer gs.gameMutex.Unlock()
-	conn, err := grpc.Dial(player.address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	playerClient, connection, cancel, ctx, err := createPlayerClient(player.address, rpcTimeout)
 	if err != nil {
-		log.Fatalf("Failed to dial: %s", err.Error())
+		log.Fatalf("UpdateGameState: cannot create client: %s", err.Error())
 		return
 	}
-	defer conn.Close()
-	playerClient := game_server.NewPlayerClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_, err = (playerClient).UpdateGameState(ctx, position)
+	defer connection.Close()
+	defer (*cancel)()
+	_, err = (playerClient).UpdateGameState(*ctx, position)
 	if err != nil {
 		log.Printf("UpdateGameState error sending request: %s", err.Error())
 	}
@@ -104,16 +113,14 @@ func (gs *gamesManagerServer) YourMove(player *PlayerInfo) {
 	log.Printf("YourMove, player address: %s\n", player.address)
 	gs.gameMutex.Lock()
 	defer gs.gameMutex.Unlock()
-	conn, err := grpc.Dial(player.address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	playerClient, connection, cancel, ctx, err := createPlayerClient(player.address, rpcTimeout)
 	if err != nil {
-		log.Fatalf("Failed to dial: %s", err.Error())
+		log.Fatalf("YourMove: cannot create client: %s", err.Error())
 		return
 	}
-	defer conn.Close()
-	playerClient := game_server.NewPlayerClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_, err = (playerClient).YourMove(ctx, &emptypb.Empty{})
+	defer connection.Close()
+	defer (*cancel)()
+	_, err = (playerClient).YourMove(*ctx, &emptypb.Empty{})
 	if err != nil {
 		log.Printf("YourMove error sending request: %s", err.Error())
 	}
@@ -219,22 +226,22 @@ func (gs *gamesManagerServer) GameFinished(player *PlayerInfo, gameResult GameRe
 	log.Println("GameFinished")
 	gs.gameMutex.Lock()
 	defer gs.gameMutex.Unlock()
-	conn, err := grpc.Dial(player.address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	playerClient, connection, cancel, ctx, err := createPlayerClient(player.address, rpcTimeout)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
-	playerClient := game_server.NewPlayerClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	var gameResultEnum game_server.GameResultEnum
-	if gameResult == Win {
-		gameResultEnum = game_server.GameResultEnum_Win
-	} else {
-		gameResultEnum = game_server.GameResultEnum_Loss
-	}
-	_, err = playerClient.GameFinished(ctx, &game_server.GameResult{Result: gameResultEnum})
+	defer connection.Close()
+	defer (*cancel)()
+	gameResultEnum := getGameResultEnum(gameResult)
+	_, err = playerClient.GameFinished(*ctx, &game_server.GameResult{Result: gameResultEnum})
 	return err
+}
+
+func getGameResultEnum(gameResult GameResult) game_server.GameResultEnum {
+	if gameResult == Win {
+		return game_server.GameResultEnum_Win
+	}
+	return game_server.GameResultEnum_Loss
 }
 
 func (gs *gamesManagerServer) Reset() {
