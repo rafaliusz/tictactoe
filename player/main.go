@@ -1,24 +1,21 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/rafaliusz/tictactoe/pkg/game_server"
 	"github.com/rafaliusz/tictactoe/pkg/logic"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
 	serverAddress = "localhost:666"
+	joinTimeout   = 5 * time.Second
+	moveTimeout   = 5 * time.Second
 )
 
 func createServer() *grpc.Server {
@@ -27,59 +24,34 @@ func createServer() *grpc.Server {
 	return grpcServer
 }
 
-func startServer(server *playerServer) {
-	server.grpcServer = createServer()
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", server.port))
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(-1)
-	}
+func startServer(server *playerServer, listener net.Listener) {
+	server.address = listener.Addr().String()
 	game_server.RegisterPlayerServer(server.grpcServer, server)
-	server.grpcServer.Serve(lis)
+	log.Printf("starting server: %s", listener.Addr().String())
+	err := server.grpcServer.Serve(listener)
+	if err != nil {
+		log.Fatalf("serve error: %s", err.Error())
+	}
 }
 
-func (ps *playerServer) joinGame(port int) (bool, error) {
-	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(-1)
-	}
-	defer conn.Close()
-	gamesManagerClient := game_server.NewGamesManagerClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	md := metadata.New(map[string]string{"address": "localhost:" + strconv.Itoa(port)})
-	ctx = metadata.NewOutgoingContext(ctx, md)
-	defer cancel()
-	res, err := gamesManagerClient.Join(ctx, &emptypb.Empty{})
-	if err != nil {
-		return false, err
-	}
-	if res.Result {
-		ps.token = res.Token
-	}
-	return res.Result, nil
-}
-
-func createPlayerServer(port int) *playerServer {
-	var ps playerServer
-	ps.port = port
+func createPlayerServer(listener net.Listener) *playerServer {
+	ps := &playerServer{}
+	ps.grpcServer = createServer()
 	ps.move = make(chan [2]int, 1)
 	ps.playersSymbol = logic.Circle
-	return &ps
+	ps.address = listener.Addr().String()
+	return ps
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		log.Fatalln("Need port as first argument")
-		os.Exit(1)
-	}
-	port, err := strconv.Atoi(os.Args[1])
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		fmt.Println("Invalid port")
-		os.Exit(1)
+		fmt.Println(err.Error())
+		os.Exit(-1)
 	}
-	ps := createPlayerServer(port)
-	joined, err := ps.joinGame(port)
+	ps := createPlayerServer(listener)
+	go startServer(ps, listener)
+	joined, err := ps.joinGame()
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(-1)
@@ -90,7 +62,6 @@ func main() {
 	} else {
 		log.Println("Joined the game")
 	}
-	go startServer(ps)
 	log.Println("server started")
 
 	for {
@@ -109,4 +80,5 @@ func main() {
 		}
 		time.Sleep(time.Second * 2)
 	}
+	ps.grpcServer.GracefulStop()
 }
