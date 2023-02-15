@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,6 +27,12 @@ type playerServer struct {
 	needMove      atomic.Bool
 	move          chan [2]int
 	token         string
+}
+
+type RequestError string
+
+func (err RequestError) Error() string {
+	return string(err)
 }
 
 func createGamesManagerClient(address string, token string, timeout time.Duration) (game_server.GamesManagerClient, *grpc.ClientConn, *context.CancelFunc, *context.Context, error) {
@@ -57,8 +64,42 @@ func (ps *playerServer) joinGame() (bool, error) {
 	}
 	if res.Result {
 		ps.token = res.Token
+		ps.playersSymbol = logic.Symbol(res.Symbol)
+		saveToken(ps.token)
 	}
 	return res.Result, nil
+}
+
+func (ps *playerServer) reconnect(token string) (bool, error) {
+	gamesManagerClient, connection, cancel, ctx, err := createGamesManagerClient(ps.address, ps.token, joinTimeout)
+	if err != nil {
+		return false, err
+	}
+	defer connection.Close()
+	defer (*cancel)()
+	res, err := gamesManagerClient.Reconnect(*ctx, &game_server.ReconnectData{Token: token})
+	if err != nil {
+		return false, RequestError(fmt.Sprintf("Reconnect error: %s", err.Error()))
+	}
+	if res == nil || !res.Result {
+		return false, RequestError(fmt.Sprintf("Reconnect: failed, server returned \"%s\"", res.Text))
+	}
+	if len(res.Board) != 9 {
+		return false, RequestError(fmt.Sprintf("Reconnect: server returned invalid board bytes count: %d", len(res.Board)))
+	}
+	boardBytes := (*[9]byte)(res.Board)
+	ps.game = logic.TicTacToeGame{Board: logic.BoardFromByteArray(*boardBytes)}
+	ps.playersSymbol = logic.Symbol(res.Symbol)
+	ps.token = token
+	return true, nil
+}
+
+func saveToken(token string) {
+	tokenBytes := []byte(token)
+	err := os.WriteFile("token.txt", tokenBytes, 0644)
+	if err != nil {
+		log.Fatalf("failed to save token to file: %s", err.Error())
+	}
 }
 
 func (ps *playerServer) YourMove(ctx context.Context, empty *emptypb.Empty) (*game_server.YourMoveResult, error) {
@@ -84,12 +125,6 @@ func (server *playerServer) IsGameFinished() bool {
 	server.gameMutex.Lock()
 	defer server.gameMutex.Unlock()
 	return server.game.GetGameState() != logic.InProgress
-}
-
-type MoveError struct{}
-
-func (err MoveError) Error() string {
-	return "Error occured during PlayerMove"
 }
 
 func (ps *playerServer) PlayerMove() {

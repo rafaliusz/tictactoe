@@ -25,6 +25,7 @@ const _ = grpc.SupportPackageIsVersion7
 type GamesManagerClient interface {
 	Join(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*JoinResult, error)
 	Move(ctx context.Context, in *Position, opts ...grpc.CallOption) (*MoveResult, error)
+	Reconnect(ctx context.Context, in *ReconnectData, opts ...grpc.CallOption) (*ReconnectResult, error)
 }
 
 type gamesManagerClient struct {
@@ -53,12 +54,22 @@ func (c *gamesManagerClient) Move(ctx context.Context, in *Position, opts ...grp
 	return out, nil
 }
 
+func (c *gamesManagerClient) Reconnect(ctx context.Context, in *ReconnectData, opts ...grpc.CallOption) (*ReconnectResult, error) {
+	out := new(ReconnectResult)
+	err := c.cc.Invoke(ctx, "/GamesManager/Reconnect", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GamesManagerServer is the server API for GamesManager service.
 // All implementations must embed UnimplementedGamesManagerServer
 // for forward compatibility
 type GamesManagerServer interface {
 	Join(context.Context, *empty.Empty) (*JoinResult, error)
 	Move(context.Context, *Position) (*MoveResult, error)
+	Reconnect(context.Context, *ReconnectData) (*ReconnectResult, error)
 	mustEmbedUnimplementedGamesManagerServer()
 }
 
@@ -71,6 +82,9 @@ func (UnimplementedGamesManagerServer) Join(context.Context, *empty.Empty) (*Joi
 }
 func (UnimplementedGamesManagerServer) Move(context.Context, *Position) (*MoveResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Move not implemented")
+}
+func (UnimplementedGamesManagerServer) Reconnect(context.Context, *ReconnectData) (*ReconnectResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Reconnect not implemented")
 }
 func (UnimplementedGamesManagerServer) mustEmbedUnimplementedGamesManagerServer() {}
 
@@ -121,6 +135,24 @@ func _GamesManager_Move_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GamesManager_Reconnect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReconnectData)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GamesManagerServer).Reconnect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/GamesManager/Reconnect",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GamesManagerServer).Reconnect(ctx, req.(*ReconnectData))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GamesManager_ServiceDesc is the grpc.ServiceDesc for GamesManager service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -135,6 +167,10 @@ var GamesManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Move",
 			Handler:    _GamesManager_Move_Handler,
+		},
+		{
+			MethodName: "Reconnect",
+			Handler:    _GamesManager_Reconnect_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

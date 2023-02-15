@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/rafaliusz/tictactoe/pkg/game_server"
-	"github.com/rafaliusz/tictactoe/pkg/logic"
 	"google.golang.org/grpc"
 )
 
@@ -38,44 +37,87 @@ func createPlayerServer(listener net.Listener) *playerServer {
 	ps := &playerServer{}
 	ps.grpcServer = createServer()
 	ps.move = make(chan [2]int, 1)
-	ps.playersSymbol = logic.Circle
 	ps.address = listener.Addr().String()
 	return ps
+}
+
+func tokenExists() bool {
+	if _, err := os.Stat("token.txt"); err == nil {
+		return true
+	}
+	return false
+}
+
+func getToken() (string, error) {
+	dat, err := os.ReadFile("token.txt")
+	if err != nil {
+		return "", err
+	}
+	return string(dat), nil
+}
+
+func removeToken() {
+	if tokenExists() {
+		os.Remove("token.txt")
+	}
+}
+
+func reconnect(ps *playerServer) bool {
+	if !tokenExists() {
+		return false
+	}
+	token, err := getToken()
+	if err != nil {
+		log.Printf("error reading token: %s", err.Error())
+		return false
+	}
+	res, err := ps.reconnect(token)
+	if err != nil {
+		log.Println(err.Error())
+		return false
+	}
+	if !res {
+		log.Printf("Couldn't reconnect")
+		return false
+	}
+	return true
+}
+
+func join(ps *playerServer) {
+	joined, err := ps.joinGame()
+	if err != nil {
+		log.Fatalf("Error joining: %s", err.Error())
+	}
+	if !joined {
+		log.Fatalln("Error joining game")
+	}
+	log.Println("Joined the game")
 }
 
 func main() {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(-1)
+		log.Fatalln(err.Error())
 	}
 	ps := createPlayerServer(listener)
 	go startServer(ps, listener)
-	joined, err := ps.joinGame()
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(-1)
+
+	res := reconnect(ps)
+	if !res {
+		removeToken()
+		join(ps)
 	}
-	if !joined {
-		log.Println("Could not join the game")
-		os.Exit(-1)
-	} else {
-		log.Println("Joined the game")
-	}
-	log.Println("server started")
 
 	for {
 		if ps.needMove.Load() {
 			fmt.Print(ps.game.ToString())
 			row, column := readPosition()
-			fmt.Println("main: got move")
 			ps.needMove.Store(false)
-			fmt.Println("main: need move set")
 			ps.move <- [2]int{row, column}
-			fmt.Println("main: move sent")
 			continue
 		}
 		if ps.IsGameFinished() {
+			removeToken()
 			break
 		}
 		time.Sleep(time.Second * 2)

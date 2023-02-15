@@ -71,7 +71,7 @@ func (gs *gamesManagerServer) Join(ctx context.Context, in *empty.Empty) (*game_
 	if gs.playersCount == 2 {
 		go gs.StartGame()
 	}
-	return &game_server.JoinResult{Result: true, Token: token.String(), Info: "Welcome to the lobby"}, nil
+	return &game_server.JoinResult{Result: true, Token: token.String(), Info: "Welcome to the lobby", Symbol: game_server.SymbolEnum(gs.players[gs.playersCount-1].symbol)}, nil
 }
 
 func (gs *gamesManagerServer) StartGame() {
@@ -248,4 +248,40 @@ func (gs *gamesManagerServer) Reset() {
 	gs.game = logic.TicTacToeGame{}
 	gs.playersCount = 0
 	gs.players = [2]PlayerInfo{}
+}
+
+func (gs *gamesManagerServer) Reconnect(ctx context.Context, reconnectData *game_server.ReconnectData) (*game_server.ReconnectResult, error) {
+	log.Println("Reconnect")
+	gs.gameMutex.Lock()
+	defer gs.gameMutex.Unlock()
+	if gs.playersCount < 2 {
+		log.Printf("Reconnect: expired token, there's no active game: %s\n", reconnectData.Token)
+		return &game_server.ReconnectResult{Result: false, Text: "expired token, there's no active game"}, nil
+	}
+	player := getPlayer(&gs.players, reconnectData.Token)
+	if player == nil {
+		log.Printf("Reconnect: invalid token: %s\n", reconnectData.Token)
+		return &game_server.ReconnectResult{Result: false, Text: "invalid token"}, nil
+	}
+	address, err := getFromMetadata(&ctx, "address")
+	if err != nil {
+		log.Fatalf("Reconnect: error getting address from metadata: %s\n", err.Error())
+		return &game_server.ReconnectResult{Result: false, Text: "error retrieving players's address"}, err
+	}
+	player.address = address
+	if player.symbol == gs.game.GetNextMove() {
+		go gs.YourMove(player)
+	}
+	gameState := gs.game.ToByteArray()
+	return &game_server.ReconnectResult{Result: true, Text: "you've reconnected successfully", Board: gameState[:], Symbol: game_server.SymbolEnum(player.symbol)}, nil
+}
+
+func getPlayer(players *[2]PlayerInfo, token string) *PlayerInfo {
+	if players[0].token == token {
+		return &players[0]
+	}
+	if players[1].token == token {
+		return &players[1]
+	}
+	return nil
 }
