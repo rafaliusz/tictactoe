@@ -55,3 +55,19 @@ func (board *Board) ToString() string {
 	}
 	return res
 }
+
+func (board *Board) ToByteArray() (array [9]byte) {
+	for i, column := range board {
+		for j, element := range column {
+			array[i*3+j] = byte(element)
+		}
+	}
+	return array
+}
+
+func BoardFromByteArray(array [9]byte) (board Board) {
+	for i := 0; i < 9; i++ {
+		board[i/3][i%3] = Symbol(array[i])
+	}
+	return board
+}

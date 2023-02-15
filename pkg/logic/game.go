@@ -58,7 +58,7 @@ func move(board *Board, row int, column int, symbol Symbol) error {
 		return InvalidMoveError(fmt.Sprintf("Invalid index, %d:%d is not within the boundaries of the board", row, column))
 	}
 	if board[row][column] != None {
-		return InvalidMoveError(fmt.Sprintf("Invalid move, %d:%d is being used by %s", row, column, (&symbol).Name()))
+		return InvalidMoveError(fmt.Sprintf("Invalid move, %d:%d is being used by %s", row, column, (board[row][column]).Name()))
 	}
 	board[row][column] = symbol
 	return nil
