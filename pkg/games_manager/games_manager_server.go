@@ -9,8 +9,8 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/google/uuid"
-	"github.com/rafaliusz/tictactoe/pkg/game_server"
 	"github.com/rafaliusz/tictactoe/pkg/logic"
+	"github.com/rafaliusz/tictactoe/pkg/server"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -18,7 +18,7 @@ import (
 )
 
 type gamesManagerServer struct {
-	game_server.UnimplementedGamesManagerServer
+	server.UnimplementedGamesManagerServer
 	players      [2]PlayerInfo
 	playersCount int32
 	game         logic.TicTacToeGame
@@ -37,16 +37,16 @@ func (err JoinError) Error() string {
 	return string(err)
 }
 
-func (gs *gamesManagerServer) Join(ctx context.Context, in *empty.Empty) (*game_server.JoinResult, error) {
+func (gs *gamesManagerServer) Join(ctx context.Context, in *empty.Empty) (*server.JoinResult, error) {
 	gs.gameMutex.Lock()
 	defer gs.gameMutex.Unlock()
 	log.Println("Join called")
 	if ctx == nil {
-		return &game_server.JoinResult{Result: false, Info: "Internal error"}, JoinError("Nil context")
+		return &server.JoinResult{Result: false, Info: "Internal error"}, JoinError("Nil context")
 	}
 	if gs.playersCount == 2 {
 		log.Println("Join: Lobby full")
-		return &game_server.JoinResult{Result: false, Info: "Lobby is full"}, nil
+		return &server.JoinResult{Result: false, Info: "Lobby is full"}, nil
 	}
 	var symbol logic.Symbol
 	if gs.playersCount == 0 {
@@ -56,11 +56,11 @@ func (gs *gamesManagerServer) Join(ctx context.Context, in *empty.Empty) (*game_
 	}
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return &game_server.JoinResult{Result: false, Info: "Internal error"}, JoinError("Can't get metadata")
+		return &server.JoinResult{Result: false, Info: "Internal error"}, JoinError("Can't get metadata")
 	}
 	addressMD, ok := md["address"]
 	if !ok {
-		return &game_server.JoinResult{Result: false, Info: "Internal error"}, JoinError("Can't get address from metadata")
+		return &server.JoinResult{Result: false, Info: "Internal error"}, JoinError("Can't get address from metadata")
 	}
 	address := addressMD[0]
 	token := uuid.New()
@@ -71,7 +71,7 @@ func (gs *gamesManagerServer) Join(ctx context.Context, in *empty.Empty) (*game_
 	if gs.playersCount == 2 {
 		go gs.StartGame()
 	}
-	return &game_server.JoinResult{Result: true, Token: token.String(), Info: "Welcome to the lobby", Symbol: game_server.SymbolEnum(gs.players[gs.playersCount-1].symbol)}, nil
+	return &server.JoinResult{Result: true, Token: token.String(), Info: "Welcome to the lobby", Symbol: server.SymbolEnum(gs.players[gs.playersCount-1].symbol)}, nil
 }
 
 func (gs *gamesManagerServer) StartGame() {
@@ -79,17 +79,17 @@ func (gs *gamesManagerServer) StartGame() {
 	gs.YourMove(&gs.players[0])
 }
 
-func createPlayerClient(address string, timeout time.Duration) (game_server.PlayerClient, *grpc.ClientConn, *context.CancelFunc, *context.Context, error) {
+func createPlayerClient(address string, timeout time.Duration) (server.PlayerClient, *grpc.ClientConn, *context.CancelFunc, *context.Context, error) {
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	playerClient := game_server.NewPlayerClient(conn)
+	playerClient := server.NewPlayerClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	return playerClient, conn, &cancel, &ctx, nil
 }
 
-func (gs *gamesManagerServer) UpdateGameState(player *PlayerInfo, position *game_server.Position) {
+func (gs *gamesManagerServer) UpdateGameState(player *PlayerInfo, position *server.Position) {
 	log.Printf("UpdateGameState, player address: %s\n", player.address)
 	gs.gameMutex.Lock()
 	defer gs.gameMutex.Unlock()
@@ -139,36 +139,36 @@ const (
 	Loss
 )
 
-func (gs *gamesManagerServer) Move(ctx context.Context, position *game_server.Position) (*game_server.MoveResult, error) {
+func (gs *gamesManagerServer) Move(ctx context.Context, position *server.Position) (*server.MoveResult, error) {
 	fmt.Println("Move called")
 	gs.gameMutex.Lock()
 	defer gs.gameMutex.Unlock()
 	if ctx == nil {
-		return &game_server.MoveResult{Result: game_server.MoveResultEnum_Error}, MoveError("Nil context")
+		return &server.MoveResult{Result: server.MoveResultEnum_Error}, MoveError("Nil context")
 	}
 	address, err := getFromMetadata(&ctx, "address")
 	if err != nil {
-		return &game_server.MoveResult{Result: game_server.MoveResultEnum_Error}, err
+		return &server.MoveResult{Result: server.MoveResultEnum_Error}, err
 	}
 	token, err := getFromMetadata(&ctx, "token")
 	if err != nil {
-		return &game_server.MoveResult{Result: game_server.MoveResultEnum_Error}, err
+		return &server.MoveResult{Result: server.MoveResultEnum_Error}, err
 	}
 	currentPlayer, otherPlayer := getPlayers(gs.players, token)
 	if currentPlayer == nil || otherPlayer == nil {
 		log.Printf("Invalid token provided: %s, address: %s", token, address)
-		return &game_server.MoveResult{Result: game_server.MoveResultEnum_Error}, err
+		return &server.MoveResult{Result: server.MoveResultEnum_Error}, err
 	}
 	currentPlayer.address = address
 
 	gameState, err := gs.game.Move(int(position.Column), int(position.Row), currentPlayer.symbol)
 	if err != nil {
 		go gs.YourMove(currentPlayer)
-		return &game_server.MoveResult{Result: game_server.MoveResultEnum_Retry}, err
+		return &server.MoveResult{Result: server.MoveResultEnum_Retry}, err
 	}
 
 	if gameState == logic.InProgress {
-		go gs.UpdateGameState(otherPlayer, &game_server.Position{Row: position.Row, Column: position.Column})
+		go gs.UpdateGameState(otherPlayer, &server.Position{Row: position.Row, Column: position.Column})
 	} else {
 		go gs.FinishTheGame(position, struct {
 			*PlayerInfo
@@ -179,7 +179,7 @@ func (gs *gamesManagerServer) Move(ctx context.Context, position *game_server.Po
 		}{otherPlayer, Loss})
 	}
 
-	return &game_server.MoveResult{Result: game_server.MoveResultEnum_Ok}, nil
+	return &server.MoveResult{Result: server.MoveResultEnum_Ok}, nil
 }
 
 func getFromMetadata(ctx *context.Context, key string) (string, error) {
@@ -209,14 +209,14 @@ func getPlayers(players [2]PlayerInfo, token string) (*PlayerInfo, *PlayerInfo) 
 	return currentPlayer, otherPlayer
 }
 
-func (gs *gamesManagerServer) FinishTheGame(position *game_server.Position, player1 struct {
+func (gs *gamesManagerServer) FinishTheGame(position *server.Position, player1 struct {
 	*PlayerInfo
 	GameResult
 }, player2 struct {
 	*PlayerInfo
 	GameResult
 }) {
-	gs.UpdateGameState(player2.PlayerInfo, &game_server.Position{Row: position.Row, Column: position.Column})
+	gs.UpdateGameState(player2.PlayerInfo, &server.Position{Row: position.Row, Column: position.Column})
 	gs.GameFinished(player1.PlayerInfo, player1.GameResult)
 	gs.GameFinished(player2.PlayerInfo, player2.GameResult)
 	gs.Reset()
@@ -233,15 +233,15 @@ func (gs *gamesManagerServer) GameFinished(player *PlayerInfo, gameResult GameRe
 	defer connection.Close()
 	defer (*cancel)()
 	gameResultEnum := getGameResultEnum(gameResult)
-	_, err = playerClient.GameFinished(*ctx, &game_server.GameResult{Result: gameResultEnum})
+	_, err = playerClient.GameFinished(*ctx, &server.GameResult{Result: gameResultEnum})
 	return err
 }
 
-func getGameResultEnum(gameResult GameResult) game_server.GameResultEnum {
+func getGameResultEnum(gameResult GameResult) server.GameResultEnum {
 	if gameResult == Win {
-		return game_server.GameResultEnum_Win
+		return server.GameResultEnum_Win
 	}
-	return game_server.GameResultEnum_Loss
+	return server.GameResultEnum_Loss
 }
 
 func (gs *gamesManagerServer) Reset() {
@@ -250,30 +250,30 @@ func (gs *gamesManagerServer) Reset() {
 	gs.players = [2]PlayerInfo{}
 }
 
-func (gs *gamesManagerServer) Reconnect(ctx context.Context, reconnectData *game_server.ReconnectData) (*game_server.ReconnectResult, error) {
+func (gs *gamesManagerServer) Reconnect(ctx context.Context, reconnectData *server.ReconnectData) (*server.ReconnectResult, error) {
 	log.Println("Reconnect")
 	gs.gameMutex.Lock()
 	defer gs.gameMutex.Unlock()
 	if gs.playersCount < 2 {
 		log.Printf("Reconnect: expired token, there's no active game: %s\n", reconnectData.Token)
-		return &game_server.ReconnectResult{Result: false, Text: "expired token, there's no active game"}, nil
+		return &server.ReconnectResult{Result: false, Text: "expired token, there's no active game"}, nil
 	}
 	player := getPlayer(&gs.players, reconnectData.Token)
 	if player == nil {
 		log.Printf("Reconnect: invalid token: %s\n", reconnectData.Token)
-		return &game_server.ReconnectResult{Result: false, Text: "invalid token"}, nil
+		return &server.ReconnectResult{Result: false, Text: "invalid token"}, nil
 	}
 	address, err := getFromMetadata(&ctx, "address")
 	if err != nil {
 		log.Fatalf("Reconnect: error getting address from metadata: %s\n", err.Error())
-		return &game_server.ReconnectResult{Result: false, Text: "error retrieving players's address"}, err
+		return &server.ReconnectResult{Result: false, Text: "error retrieving players's address"}, err
 	}
 	player.address = address
 	if player.symbol == gs.game.GetNextMove() {
 		go gs.YourMove(player)
 	}
 	gameState := gs.game.ToByteArray()
-	return &game_server.ReconnectResult{Result: true, Text: "you've reconnected successfully", Board: gameState[:], Symbol: game_server.SymbolEnum(player.symbol)}, nil
+	return &server.ReconnectResult{Result: true, Text: "you've reconnected successfully", Board: gameState[:], Symbol: server.SymbolEnum(player.symbol)}, nil
 }
 
 func getPlayer(players *[2]PlayerInfo, token string) *PlayerInfo {

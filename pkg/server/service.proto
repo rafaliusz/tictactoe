@@ -1,5 +1,5 @@
 syntax = "proto3";
-option go_package = "/game_server";
+option go_package = "/server";
 import "google/protobuf/empty.proto";
 
 service GamesManager {

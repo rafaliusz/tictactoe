@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/rafaliusz/tictactoe/pkg/game_server"
+	"github.com/rafaliusz/tictactoe/pkg/server"
 	"google.golang.org/grpc"
 )
 
@@ -23,11 +23,11 @@ func createServer() *grpc.Server {
 	return grpcServer
 }
 
-func startServer(server *playerServer, listener net.Listener) {
-	server.address = listener.Addr().String()
-	game_server.RegisterPlayerServer(server.grpcServer, server)
+func startServer(playerServer *playerServer, listener net.Listener) {
+	playerServer.address = listener.Addr().String()
+	server.RegisterPlayerServer(playerServer.grpcServer, playerServer)
 	log.Printf("starting server: %s", listener.Addr().String())
-	err := server.grpcServer.Serve(listener)
+	err := playerServer.grpcServer.Serve(listener)
 	if err != nil {
 		log.Fatalf("serve error: %s", err.Error())
 	}

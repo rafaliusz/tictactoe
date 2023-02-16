@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v3.8.0
-// source: pkg/game_server/service.proto
+// source: pkg/server/service.proto
 
-package game_server
+package server
 
 import (
 	context "context"
@@ -174,7 +174,7 @@ var GamesManager_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "pkg/game_server/service.proto",
+	Metadata: "pkg/server/service.proto",
 }
 
 // PlayerClient is the client API for Player service.
@@ -332,5 +332,5 @@ var Player_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "pkg/game_server/service.proto",
+	Metadata: "pkg/server/service.proto",
 }
