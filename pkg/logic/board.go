@@ -65,9 +65,9 @@ func (board *Board) ToByteArray() (array [9]byte) {
 	return array
 }
 
-func BoardFromByteArray(array [9]byte) (board Board) {
+func BoardFromArray(array *[9]byte) (board Board) {
 	for i := 0; i < 9; i++ {
-		board[i/3][i%3] = Symbol(array[i])
+		board[i/3][i%3] = Symbol((*array)[i])
 	}
-	return board
+	return
 }

@@ -65,7 +65,10 @@ func (ps *playerServer) joinGame() (bool, error) {
 	if res.Result {
 		ps.token = res.Token
 		ps.playersSymbol = logic.Symbol(res.Symbol)
-		saveToken(ps.token)
+		err := saveToken(ps.token)
+		if err != nil {
+			log.Printf("Can't save token to file, reconnecting won't be possible. Details: %s", err.Error())
+		}
 	}
 	return res.Result, nil
 }
@@ -88,18 +91,15 @@ func (ps *playerServer) reconnect(token string) (bool, error) {
 		return false, RequestError(fmt.Sprintf("Reconnect: server returned invalid board bytes count: %d", len(res.Board)))
 	}
 	boardBytes := (*[9]byte)(res.Board)
-	ps.game = logic.TicTacToeGame{Board: logic.BoardFromByteArray(*boardBytes)}
+	ps.game = logic.TicTacToeGame{Board: logic.BoardFromrray(boardBytes)}
 	ps.playersSymbol = logic.Symbol(res.Symbol)
 	ps.token = token
 	return true, nil
 }
 
-func saveToken(token string) {
+func saveToken(token string) error {
 	tokenBytes := []byte(token)
-	err := os.WriteFile("token.txt", tokenBytes, 0644)
-	if err != nil {
-		log.Fatalf("failed to save token to file: %s", err.Error())
-	}
+	return os.WriteFile("token.txt", tokenBytes, 0644)
 }
 
 func (ps *playerServer) YourMove(ctx context.Context, empty *emptypb.Empty) (*server.YourMoveResult, error) {
