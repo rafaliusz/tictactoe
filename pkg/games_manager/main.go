@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"net"
-	"os"
 	"time"
 
 	"github.com/rafaliusz/tictactoe/pkg/server"
@@ -28,7 +27,6 @@ func startServer(gamesManagerServer *gamesManagerServer) {
 	lis, err := net.Listen("tcp", "127.0.0.1:666")
 	if err != nil {
 		log.Fatalln(err.Error())
-		os.Exit(-1)
 	}
 	grpcServer.Serve(lis)
 }
