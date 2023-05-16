@@ -36,7 +36,7 @@ func (gs *gamesManagerServer) Join(ctx context.Context, in *empty.Empty) (*serve
 	defer gs.gameMutex.Unlock()
 	log.Println("Join called")
 	if ctx == nil {
-		return &server.JoinResult{Result: false, Info: "Internal error"}, fmt.Errorf("Nil context")
+		return &server.JoinResult{Result: false, Info: "Internal error"}, fmt.Errorf("nil context")
 	}
 	if gs.playersCount == 2 {
 		log.Println("Join: Lobby full")
@@ -50,11 +50,11 @@ func (gs *gamesManagerServer) Join(ctx context.Context, in *empty.Empty) (*serve
 	}
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return &server.JoinResult{Result: false, Info: "Internal error"}, fmt.Errorf("Can't get metadata")
+		return &server.JoinResult{Result: false, Info: "Internal error"}, fmt.Errorf("can't get metadata")
 	}
 	addressMD, ok := md["address"]
 	if !ok {
-		return &server.JoinResult{Result: false, Info: "Internal error"}, fmt.Errorf("Can't get address from metadata")
+		return &server.JoinResult{Result: false, Info: "Internal error"}, fmt.Errorf("can't get address from metadata")
 	}
 	address := addressMD[0]
 	token := uuid.New()
