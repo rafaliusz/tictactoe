@@ -31,18 +31,12 @@ type PlayerInfo struct {
 	symbol  logic.Symbol
 }
 
-type JoinError string
-
-func (err JoinError) Error() string {
-	return string(err)
-}
-
 func (gs *gamesManagerServer) Join(ctx context.Context, in *empty.Empty) (*server.JoinResult, error) {
 	gs.gameMutex.Lock()
 	defer gs.gameMutex.Unlock()
 	log.Println("Join called")
 	if ctx == nil {
-		return &server.JoinResult{Result: false, Info: "Internal error"}, JoinError("Nil context")
+		return &server.JoinResult{Result: false, Info: "Internal error"}, fmt.Errorf("Nil context")
 	}
 	if gs.playersCount == 2 {
 		log.Println("Join: Lobby full")
@@ -56,11 +50,11 @@ func (gs *gamesManagerServer) Join(ctx context.Context, in *empty.Empty) (*serve
 	}
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return &server.JoinResult{Result: false, Info: "Internal error"}, JoinError("Can't get metadata")
+		return &server.JoinResult{Result: false, Info: "Internal error"}, fmt.Errorf("Can't get metadata")
 	}
 	addressMD, ok := md["address"]
 	if !ok {
-		return &server.JoinResult{Result: false, Info: "Internal error"}, JoinError("Can't get address from metadata")
+		return &server.JoinResult{Result: false, Info: "Internal error"}, fmt.Errorf("Can't get address from metadata")
 	}
 	address := addressMD[0]
 	token := uuid.New()
@@ -126,12 +120,6 @@ func (gs *gamesManagerServer) YourMove(player *PlayerInfo) {
 	}
 }
 
-type MoveError string
-
-func (err MoveError) Error() string {
-	return string(err)
-}
-
 type GameResult byte
 
 const (
@@ -144,7 +132,7 @@ func (gs *gamesManagerServer) Move(ctx context.Context, position *server.Positio
 	gs.gameMutex.Lock()
 	defer gs.gameMutex.Unlock()
 	if ctx == nil {
-		return &server.MoveResult{Result: server.MoveResultEnum_Error}, MoveError("Nil context")
+		return &server.MoveResult{Result: server.MoveResultEnum_Error}, fmt.Errorf("nil context")
 	}
 	address, err := getFromMetadata(&ctx, "address")
 	if err != nil {
@@ -185,11 +173,11 @@ func (gs *gamesManagerServer) Move(ctx context.Context, position *server.Positio
 func getFromMetadata(ctx *context.Context, key string) (string, error) {
 	md, ok := metadata.FromIncomingContext(*ctx)
 	if !ok {
-		return "", MoveError("Can't get metadata")
+		return "", fmt.Errorf("can't get metadata")
 	}
 	value, ok := md[key]
 	if !ok {
-		return "", MoveError("Can't get from metadata: " + key)
+		return "", fmt.Errorf("can't get from metadata: " + key)
 	}
 	return value[0], nil
 }

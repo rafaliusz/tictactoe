@@ -23,21 +23,15 @@ func (game *TicTacToeGame) GetNextMove() Symbol {
 	return Cross
 }
 
-type InvalidMoveError string
-
-func (err InvalidMoveError) Error() string {
-	return string(err)
-}
-
 func (game *TicTacToeGame) Move(row int, column int, symbol Symbol) (GameState, error) {
 	if game.gameState != InProgress {
-		return game.gameState, InvalidMoveError("Cannot move when the game is finished")
+		return game.gameState, fmt.Errorf("cannot move when the game is finished")
 	}
 	if symbol == None {
-		return game.gameState, InvalidMoveError("Cannot use None as a move symbol")
+		return game.gameState, fmt.Errorf("cannot use None as a move symbol")
 	}
 	if symbol == game.lastMove {
-		return game.gameState, InvalidMoveError(fmt.Sprintf("Cannot use %s twice in a row", symbol.String()))
+		return game.gameState, fmt.Errorf("cannot use %s twice in a row", symbol.String())
 	}
 
 	err := move(&game.Board, row, column, symbol)
@@ -55,10 +49,10 @@ func (game *TicTacToeGame) GetGameState() GameState {
 
 func move(board *Board, row int, column int, symbol Symbol) error {
 	if row > 2 || column > 2 {
-		return InvalidMoveError(fmt.Sprintf("Invalid index, %d:%d is not within the boundaries of the board", row, column))
+		return fmt.Errorf("invalid index, %d:%d is not within the boundaries of the board", row, column)
 	}
 	if board[row][column] != None {
-		return InvalidMoveError(fmt.Sprintf("Invalid move, %d:%d is being used by %s", row, column, (board[row][column]).Name()))
+		return fmt.Errorf("invalid move, %d:%d is being used by %s", row, column, (board[row][column]).Name())
 	}
 	board[row][column] = symbol
 	return nil

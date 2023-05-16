@@ -29,12 +29,6 @@ type playerServer struct {
 	token         string
 }
 
-type RequestError string
-
-func (err RequestError) Error() string {
-	return string(err)
-}
-
 func createGamesManagerClient(address string, token string, timeout time.Duration) (server.GamesManagerClient, *grpc.ClientConn, *context.CancelFunc, *context.Context, error) {
 	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -82,16 +76,16 @@ func (ps *playerServer) reconnect(token string) (bool, error) {
 	defer (*cancel)()
 	res, err := gamesManagerClient.Reconnect(*ctx, &server.ReconnectData{Token: token})
 	if err != nil {
-		return false, RequestError(fmt.Sprintf("Reconnect error: %s", err.Error()))
+		return false, fmt.Errorf("reconnect error: %s", err.Error())
 	}
 	if res == nil || !res.Result {
-		return false, RequestError(fmt.Sprintf("Reconnect: failed, server returned \"%s\"", res.Text))
+		return false, fmt.Errorf("reconnect: failed, server returned \"%s\"", res.Text)
 	}
 	if len(res.Board) != 9 {
-		return false, RequestError(fmt.Sprintf("Reconnect: server returned invalid board bytes count: %d", len(res.Board)))
+		return false, fmt.Errorf("reconnect: server returned invalid board bytes count: %d", len(res.Board))
 	}
 	boardBytes := (*[9]byte)(res.Board)
-	ps.game = logic.TicTacToeGame{Board: logic.BoardFromrray(boardBytes)}
+	ps.game = logic.TicTacToeGame{Board: logic.BoardFromArray(boardBytes)}
 	ps.playersSymbol = logic.Symbol(res.Symbol)
 	ps.token = token
 	return true, nil
